@@ -1,0 +1,66 @@
+@import "tailwindcss";
+
+/*
+  Garg Jewellers — a single, committed light identity.
+  Off-white ground, one warm brown accent, quiet neutrals between, so the
+  silver product photography carries the colour.
+*/
+@theme {
+  --color-bg: #faf6ef;
+  --color-surface: #ffffff;
+  --color-surface-alt: #f1e7d8;
+  --color-ink: #34241a;
+  --color-ink-soft: #6e5a48;
+  --color-brand: #8a5a34;
+  --color-brand-deep: #5a3b22;
+  --color-line: #e3d5c0;
+  --color-silver: #a79d8d;
+  --color-good: #4b7157;
+  --color-danger: #a3492f;
+
+  --font-display: var(--font-fraunces), Georgia, serif;
+  --font-body: var(--font-work-sans), ui-sans-serif, system-ui, sans-serif;
+
+  --radius-card: 12px;
+}
+
+:root {
+  color-scheme: light;
+}
+
+html,
+body {
+  background: var(--color-bg);
+  color: var(--color-ink);
+  font-family: var(--font-body);
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Give headings the display serif by default. */
+h1, h2, h3, h4 {
+  font-family: var(--font-display);
+  text-wrap: balance;
+}
+
+::selection {
+  background: var(--color-brand);
+  color: var(--color-surface);
+}
+
+/* Utility for the uppercase mono-ish labels used throughout. */
+.eyebrow {
+  font-family: var(--font-body);
+  text-transform: uppercase;
+  letter-spacing: 0.14em;
+  font-size: 0.7rem;
+  font-weight: 600;
+  color: var(--color-brand-deep);
+}
+
+/* Thin custom scrollbar for horizontal category rails. */
+.no-scrollbar::-webkit-scrollbar { display: none; }
+.no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+
+@media (prefers-reduced-motion: reduce) {
+  * { animation: none !important; transition: none !important; }
+}

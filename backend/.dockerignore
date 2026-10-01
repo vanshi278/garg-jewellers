@@ -1,0 +1,9 @@
+.venv/
+__pycache__/
+*.pyc
+garg.db
+_alembic_tmp.db
+_alembic_verify.db
+uploads/
+.env
+.pytest_cache/

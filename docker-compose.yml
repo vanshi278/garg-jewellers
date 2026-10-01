@@ -1,0 +1,56 @@
+# Local/production-like stack: Postgres + FastAPI + Next.js.
+# Usage:  docker compose up --build
+#
+# Note on NEXT_PUBLIC_API_BASE: it's baked into the browser bundle at build
+# time, so it must be a URL the user's browser can reach. For a real deployment,
+# set it to your public API domain (e.g. https://api.gargjewellers.in) and give
+# the backend that same public URL in PUBLIC_BASE_URL.
+
+services:
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: garg
+      POSTGRES_PASSWORD: garg
+      POSTGRES_DB: garg
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U garg"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    ports:
+      - "5432:5432"
+
+  backend:
+    build: ./backend
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgresql+psycopg2://garg:garg@db:5432/garg
+      SECRET_KEY: ${SECRET_KEY:-change-me-in-production}
+      FRONTEND_ORIGIN: ${FRONTEND_ORIGIN:-http://localhost:3000}
+      PUBLIC_BASE_URL: ${PUBLIC_BASE_URL:-http://localhost:8000}
+      OWNER_EMAIL: ${OWNER_EMAIL:-owner@gargjewellers.in}
+      OWNER_PASSWORD: ${OWNER_PASSWORD:-change-me-owner}
+      # Add RAZORPAY_* and notification keys here (or an env_file) to go live.
+    volumes:
+      - uploads:/app/uploads
+    ports:
+      - "8000:8000"
+
+  frontend:
+    build:
+      context: ./frontend
+      args:
+        NEXT_PUBLIC_API_BASE: ${NEXT_PUBLIC_API_BASE:-http://localhost:8000}
+    depends_on:
+      - backend
+    ports:
+      - "3000:3000"
+
+volumes:
+  pgdata:
+  uploads:
