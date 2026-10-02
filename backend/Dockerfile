@@ -22,4 +22,6 @@ RUN mkdir -p uploads
 EXPOSE 8000
 
 # Apply DB migrations, then serve with gunicorn + uvicorn workers.
-CMD ["sh", "-c", "alembic upgrade head && gunicorn app.main:app -k uvicorn.workers.UvicornWorker -w 4 -b 0.0.0.0:8000"]
+# Worker count defaults to 2 (fits the 512MB free tier); override via WEB_CONCURRENCY.
+# $PORT is provided by the host (Render); falls back to 8000 locally.
+CMD ["sh", "-c", "alembic upgrade head && gunicorn app.main:app -k uvicorn.workers.UvicornWorker -w ${WEB_CONCURRENCY:-2} -b 0.0.0.0:${PORT:-8000}"]
