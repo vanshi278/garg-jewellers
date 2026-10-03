@@ -207,14 +207,15 @@ export default function TryOnPage() {
             ) : (
               <label className="absolute inset-0 flex cursor-pointer flex-col items-center justify-center gap-3 text-center text-ink-soft">
                 <TryOnIcon className="h-10 w-10 text-silver" />
-                <span className="font-medium">Upload or take a photo</span>
+                <span className="font-medium">Upload from gallery or take a photo</span>
                 <span className="text-sm text-silver">
                   A clear photo of your hand, ear or neck works best
                 </span>
+                {/* No `capture` attribute → on mobile the picker offers BOTH the
+                    photo library (gallery) and the camera. */}
                 <input
                   type="file"
                   accept="image/*"
-                  capture="user"
                   onChange={onPhoto}
                   className="hidden"
                 />

@@ -77,6 +77,24 @@ def create_category(body: CategoryCreate, db: Session = Depends(get_db)):
     return cat
 
 
+@router.delete("/categories/{category_id}", status_code=200)
+def delete_category(category_id: int, db: Session = Depends(get_db)):
+    cat = db.get(Category, category_id)
+    if cat is None:
+        raise HTTPException(status_code=404, detail="Category not found")
+    count = db.scalar(
+        select(func.count()).select_from(Product).where(Product.category_id == category_id)
+    ) or 0
+    if count > 0:
+        raise HTTPException(
+            status_code=409,
+            detail=f"Can't delete — {count} product(s) still use this category. Move or remove them first.",
+        )
+    db.delete(cat)
+    db.commit()
+    return {"ok": True}
+
+
 # ---- Products ----
 @router.post("/products", response_model=ProductDetail, status_code=201)
 def create_product(body: ProductCreate, db: Session = Depends(get_db)):
