@@ -1,3 +1,4 @@
 # see backend/.gitignore and frontend/.gitignore
 *.log
 .DS_Store
+.sf/
