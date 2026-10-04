@@ -5,6 +5,7 @@ import { api } from "@/lib/api";
 import { useAuth } from "@/lib/auth-context";
 import { formatPrice } from "@/lib/format";
 import CameraCapture from "@/components/CameraCapture";
+import AiPhotoshoot from "@/components/admin/AiPhotoshoot";
 import type {
   Category,
   ProductCard,
@@ -92,9 +93,13 @@ export default function AdminProducts() {
 function VariantEditor({ slug, token }: { slug: string; token: string | null }) {
   const [detail, setDetail] = useState<ProductDetail | null>(null);
 
-  useEffect(() => {
+  const reload = useCallback(() => {
     api<ProductDetail>(`/api/products/${slug}`).then(setDetail).catch(() => {});
   }, [slug]);
+
+  useEffect(() => {
+    reload();
+  }, [reload]);
 
   if (!detail) return <p className="px-4 pb-4 text-sm text-[#a98d68]">Loading…</p>;
 
@@ -102,6 +107,7 @@ function VariantEditor({ slug, token }: { slug: string; token: string | null }) 
     <div className="border-t border-[#3a2b1e] px-4 py-3">
       <ImageManager detail={detail} token={token} onChange={setDetail} />
       <DescriptionEditor detail={detail} token={token} onChange={setDetail} />
+      <AiPhotoshoot productId={detail.id} token={token} onApproved={reload} />
       <table className="mt-4 w-full text-sm">
         <thead>
           <tr className="text-left text-[0.65rem] uppercase tracking-wide text-[#a98d68]">

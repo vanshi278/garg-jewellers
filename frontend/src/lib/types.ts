@@ -155,3 +155,31 @@ export const ORDER_STATUSES = [
   "delivered",
   "cancelled",
 ] as const;
+
+// ---- AI photoshoot ----
+export interface GenCandidate {
+  id: number;
+  url: string;
+  approved: boolean;
+  comment: string | null;
+}
+
+export interface GenJob {
+  id: number;
+  product_id: number;
+  preset: string;
+  extra_prompt: string | null;
+  feedback: string | null;
+  reference_urls: string[];
+  readiness_hint: string | null;
+  status: string;
+  created_at: string;
+  candidates: GenCandidate[];
+}
+
+export const PHOTOSHOOT_PRESETS: { value: string; label: string }[] = [
+  { value: "white_studio", label: "White studio" },
+  { value: "dark_luxe", label: "Dark luxe" },
+  { value: "on_model", label: "On model" },
+  { value: "lifestyle", label: "Lifestyle" },
+];

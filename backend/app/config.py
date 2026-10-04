@@ -32,6 +32,12 @@ class Settings(BaseSettings):
     # hosts; enhance + zoom still run. Default on for local/bigger hosts.
     enable_bg_removal: bool = True
 
+    # Google Gemini image generation ("AI photoshoot"). Blank => stub mode
+    # (returns faithful processed variants so the workflow is still testable).
+    gemini_api_key: str = ""
+    gemini_image_model: str = "gemini-2.5-flash-image"
+    gemini_text_model: str = "gemini-2.5-flash"
+
     # Seed owner
     owner_email: str = "owner@gargjewellers.in"
     owner_password: str = "change-me-owner"
@@ -65,6 +71,10 @@ class Settings(BaseSettings):
     @property
     def razorpay_enabled(self) -> bool:
         return bool(self.razorpay_key_id and self.razorpay_key_secret)
+
+    @property
+    def gemini_enabled(self) -> bool:
+        return bool(self.gemini_api_key)
 
     @property
     def cloudinary_enabled(self) -> bool:
