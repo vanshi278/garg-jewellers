@@ -77,4 +77,10 @@ app.mount("/uploads", StaticFiles(directory=_uploads_dir), name="uploads")
 
 @app.get("/health", tags=["meta"])
 def health():
-    return {"status": "ok", "razorpay": settings.razorpay_enabled}
+    # Booleans only — never the keys themselves.
+    return {
+        "status": "ok",
+        "razorpay": settings.razorpay_enabled,
+        "gemini": settings.gemini_enabled,
+        "cloudinary": settings.cloudinary_enabled,
+    }
