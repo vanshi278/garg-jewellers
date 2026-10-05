@@ -13,7 +13,7 @@ from __future__ import annotations
 import logging
 from io import BytesIO
 
-from PIL import Image, ImageEnhance, ImageOps
+from PIL import Image, ImageDraw, ImageEnhance, ImageFont, ImageOps
 
 log = logging.getLogger("garg.imaging")
 
@@ -89,6 +89,45 @@ def _on_bg(rgba: Image.Image, bg: tuple[int, int, int]) -> Image.Image:
 def _jpeg(img: Image.Image) -> bytes:
     buf = BytesIO()
     img.save(buf, "JPEG", quality=JPEG_Q, optimize=True)
+    return buf.getvalue()
+
+
+def annotate_dimension(data: bytes, mm: float) -> bytes:
+    """Stamp the real measurement onto a dimension shot (AI can't know true mm,
+    so we draw the accurate size from the owner's product data)."""
+    img = Image.open(BytesIO(data)).convert("RGB")
+    w, h = img.size
+    draw = ImageDraw.Draw(img, "RGBA")
+    label = f"{mm:g} mm".rstrip()
+
+    # Measurement bar across the lower third.
+    y = int(h * 0.86)
+    x0, x1 = int(w * 0.18), int(w * 0.82)
+    bar = max(2, w // 400)
+    tick = max(6, h // 60)
+    col = (40, 28, 20, 255)
+    draw.line([(x0, y), (x1, y)], fill=col, width=bar)
+    draw.line([(x0, y - tick), (x0, y + tick)], fill=col, width=bar)
+    draw.line([(x1, y - tick), (x1, y + tick)], fill=col, width=bar)
+
+    # Label on a soft white chip for legibility.
+    size = max(18, w // 28)
+    try:
+        font = ImageFont.truetype("DejaVuSans-Bold.ttf", size)
+    except Exception:
+        font = ImageFont.load_default()
+    tb = draw.textbbox((0, 0), label, font=font)
+    tw, th = tb[2] - tb[0], tb[3] - tb[1]
+    cx = w // 2
+    pad = size // 2
+    draw.rounded_rectangle(
+        [cx - tw // 2 - pad, y - tick - th - 2 * pad, cx + tw // 2 + pad, y - tick - pad // 2],
+        radius=pad, fill=(255, 255, 255, 230),
+    )
+    draw.text((cx - tw // 2, y - tick - th - pad - pad // 2), label, fill=col, font=font)
+
+    buf = BytesIO()
+    img.save(buf, "JPEG", quality=JPEG_Q)
     return buf.getvalue()
 
 

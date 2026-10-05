@@ -159,6 +159,7 @@ export const ORDER_STATUSES = [
 // ---- AI photoshoot ----
 export interface GenCandidate {
   id: number;
+  label: string;
   url: string;
   approved: boolean;
   comment: string | null;

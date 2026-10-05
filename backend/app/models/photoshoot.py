@@ -45,6 +45,8 @@ class GenerationCandidate(Base):
     job_id: Mapped[int] = mapped_column(
         ForeignKey("generation_jobs.id", ondelete="CASCADE"), index=True
     )
+    # Which shot in the set this is ("White packshot", "On model", …).
+    label: Mapped[str] = mapped_column(String(40), default="")
     url: Mapped[str] = mapped_column(String(600))
     approved: Mapped[bool] = mapped_column(Boolean, default=False)
     comment: Mapped[str | None] = mapped_column(Text, nullable=True)

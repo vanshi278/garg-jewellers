@@ -1,13 +1,10 @@
 """AI 'photoshoot' via Google Gemini image generation.
 
-Takes a few reference photos of a piece + a scene prompt, and generates
-professional product shots that keep the design. Also runs a lightweight
-'readiness check' that can tell the owner another angle is needed.
-
-Without GEMINI_API_KEY it runs in STUB mode: it returns faithful processed
-variants of the references (via app.services.imaging) so the whole review
-workflow is testable, and the readiness check returns a canned hint. The moment
-a real key is set, the same functions call Gemini.
+One run produces a full professional set — white packshot, styled background,
+on-model, macro detail, and a dimension/scale shot — all keeping the exact
+design. A shared faithfulness wrapper is prepended to every shot. Without
+GEMINI_API_KEY it runs in STUB mode (faithful processed variants) so the review
+workflow is testable; the moment a key is set, the same code calls Gemini.
 """
 from __future__ import annotations
 
@@ -22,99 +19,170 @@ from app.services import imaging
 log = logging.getLogger("garg.genai")
 
 API_ROOT = "https://generativelanguage.googleapis.com/v1beta/models"
-TIMEOUT = 60.0
+TIMEOUT = 90.0
 
-# Scene presets → the style half of the prompt. The design-preservation half is
-# always prepended so the piece itself is never altered.
-PRESETS: dict[str, str] = {
-    "white_studio": "on a clean seamless pure-white studio background, soft even lighting, subtle reflection, e-commerce product photography",
-    "dark_luxe": "on a dark charcoal background with a warm spotlight, luxury jewellery product photography, soft shadows",
-    "on_model": "worn by a model with natural skin, tasteful and realistic placement, soft natural light, lifestyle product photography",
-    "lifestyle": "in an elegant lifestyle setting with soft bokeh background, warm natural light, premium catalogue photography",
-}
-
+# ---- Prompt building blocks ----
 _PRESERVE = (
-    "Reproduce THIS EXACT piece of 925 sterling silver jewellery with identical "
-    "design, shape, stones, engraving and proportions — do not redesign, add or "
-    "remove any detail. Keep the jewellery pixel-faithful to the reference photos. "
-    "Only change the scene/background as described. Photorealistic, high resolution. "
+    "Professional product photography of the EXACT piece of jewellery shown in the "
+    "attached photo(s) — a re-photographing of the SAME physical item, not a new "
+    "design. Reproduce with 100% fidelity: identical shape, silhouette and "
+    "proportions; the same number, cut, size, colour and placement of every "
+    "zircon/stone; the same bright rhodium-white 925 sterling silver tone (never "
+    "gold or yellow); the same engraving, filigree, prongs, setting, clasp and "
+    "chain links. Do NOT add, remove, resize, recolour or rearrange any detail, or "
+    "invent parts hidden in the reference. "
+)
+_CRAFT = (
+    " Crisp macro-quality capture, ~100mm lens, tack-sharp across the piece, "
+    "realistic metal reflections and gemstone sparkle, accurate white balance, "
+    "soft-box lighting, high resolution, photorealistic."
+)
+_NEGATIVE = (
+    " Avoid: changing the design, extra or different stones, gold or yellow tint, "
+    "duplicated jewellery, props covering the piece, text, logos, watermarks, "
+    "warping, distortion, blur."
 )
 
+# shot key -> (human label, scene line). Order defines the generated set.
+SHOT_SET: dict[str, tuple[str, str]] = {
+    "white": (
+        "White packshot",
+        "Scene: seamless pure-white (#FFFFFF) studio sweep, the piece centred with a "
+        "soft natural contact shadow and a faint reflection beneath, bright even "
+        "shadowless lighting, straight-on hero angle, clean e-commerce catalogue packshot.",
+    ),
+    "lifestyle": (
+        "Styled background",
+        "Scene: staged on polished marble or soft silk with a tasteful, softly "
+        "out-of-focus warm cream background, warm window light, gentle highlights on "
+        "the silver, premium boutique-catalogue styling; the piece is the clear focal point.",
+    ),
+    "on_model": (
+        "On model",
+        "Scene: worn by a model with natural realistic skin, anatomically-correct "
+        "placement for this item type (earring on the ear, ring on a finger, necklace "
+        "on the neckline, bangle on the wrist, nose pin on the nose), soft natural "
+        "light, shallow depth of field with the jewellery tack-sharp and the hero; "
+        "model and background softly blurred; elegant beauty shot.",
+    ),
+    "macro": (
+        "Macro detail",
+        "Scene: extreme macro close-up showing craftsmanship — silver texture, stone "
+        "facets and sparkle, engraving and prong detail — soft dramatic lighting, very "
+        "shallow depth of field, softly-graded dark background.",
+    ),
+    "dimension": (
+        "Dimension",
+        "Scene: clean white-background top-down flat-lay of the piece beside a neat "
+        "ruler with faint millimetre gridlines, even lighting, technical size-reference "
+        "catalogue look.",
+    ),
+}
+LABELS = [label for label, _ in SHOT_SET.values()]
 
-def build_prompt(preset: str, extra: str | None, feedback: str | None) -> str:
-    scene = PRESETS.get(preset, PRESETS["white_studio"])
-    prompt = f"{_PRESERVE}Scene: {scene}."
+
+def build_prompt(scene: str, extra: str | None, feedback: str | None) -> str:
+    prompt = _PRESERVE + scene + _CRAFT + _NEGATIVE
     if extra:
         prompt += f" {extra.strip()}"
     if feedback:
-        # Owner's correction from the review loop.
-        prompt += f" IMPORTANT correction from the reviewer — fix this and keep the design exact: {feedback.strip()}"
+        prompt += (
+            " REVIEWER CORRECTION (highest priority) — fix exactly this while keeping "
+            f"the design identical: {feedback.strip()}"
+        )
     return prompt
 
 
-def _parts_from_images(images: list[bytes]) -> list[dict]:
+def _scene_for(label: str) -> str:
+    for lbl, scene in SHOT_SET.values():
+        if lbl == label:
+            return scene
+    return SHOT_SET["white"][1]
+
+
+# ---- Public API ----
+def generate_set(
+    images: list[bytes], *, size_mm: float | None = None, extra: str | None = None
+) -> list[tuple[str, bytes]]:
+    """Generate the full photoshoot set: list of (label, jpeg_bytes)."""
+    out: list[tuple[str, bytes]] = []
+    stub_variants = None if settings.gemini_enabled else _stub_variants(images)
+    for i, (key, (label, scene)) in enumerate(SHOT_SET.items()):
+        if settings.gemini_enabled:
+            img = _call_gemini(images, build_prompt(scene, extra, None))
+        else:
+            img = stub_variants[i % len(stub_variants)] if stub_variants else None
+        if not img:
+            continue
+        if key == "dimension" and size_mm:
+            img = imaging.annotate_dimension(img, float(size_mm))
+        out.append((label, img))
+    return out
+
+
+def generate_one(
+    images: list[bytes], label: str, feedback: str | None, size_mm: float | None = None
+) -> bytes | None:
+    """Regenerate a single shot type (used by the per-image regenerate)."""
+    scene = _scene_for(label)
+    if settings.gemini_enabled:
+        img = _call_gemini(images, build_prompt(scene, None, feedback))
+    else:
+        variants = _stub_variants(images)
+        img = variants[0] if variants else None
+    if img and label == SHOT_SET["dimension"][0] and size_mm:
+        img = imaging.annotate_dimension(img, float(size_mm))
+    return img
+
+
+def assess_references(images: list[bytes]) -> str | None:
+    """Return a hint if more angles are needed, else None."""
+    if not settings.gemini_enabled:
+        return None if len(images) >= 2 else "Add one more photo from a different angle for a better result."
+    prompt = (
+        "You are helping photograph a piece of jewellery. From these reference "
+        "photos, can the piece be recreated faithfully? Reply exactly 'OK' if yes, "
+        "otherwise one short sentence naming the extra angle to photograph."
+    )
+    try:
+        body = {"contents": [{"parts": [{"text": prompt}, *_parts(images)]}]}
+        r = httpx.post(
+            f"{API_ROOT}/{settings.gemini_text_model}:generateContent",
+            params={"key": settings.gemini_api_key}, json=body, timeout=TIMEOUT,
+        )
+        r.raise_for_status()
+        text = (_first_text(r.json()) or "").strip()
+        return None if text.upper().startswith("OK") else (text or None)
+    except Exception:
+        log.exception("Gemini readiness check failed")
+        return None
+
+
+# ---- internals ----
+def _parts(images: list[bytes]) -> list[dict]:
     return [
         {"inline_data": {"mime_type": "image/jpeg", "data": base64.b64encode(b).decode()}}
         for b in images
     ]
 
 
-def assess_references(images: list[bytes]) -> str | None:
-    """Return a hint if more angles are needed, else None (good to go)."""
-    if not settings.gemini_enabled:
-        return None if len(images) >= 2 else "Add at least one more photo from a different angle for a better result."
-
-    prompt = (
-        "You are helping photograph a piece of jewellery. Looking at these "
-        "reference photos, are they enough to recreate the piece faithfully from "
-        "the front? Reply with exactly 'OK' if yes. If not, reply with one short "
-        "sentence telling the seller which additional angle to photograph."
-    )
+def _call_gemini(images: list[bytes], prompt: str) -> bytes | None:
     try:
-        body = {"contents": [{"parts": [{"text": prompt}, *_parts_from_images(images)]}]}
+        body = {
+            "contents": [{"parts": [{"text": prompt}, *_parts(images)]}],
+            "generationConfig": {"responseModalities": ["TEXT", "IMAGE"]},
+        }
         r = httpx.post(
-            f"{API_ROOT}/{settings.gemini_text_model}:generateContent",
-            params={"key": settings.gemini_api_key},
-            json=body,
-            timeout=TIMEOUT,
+            f"{API_ROOT}/{settings.gemini_image_model}:generateContent",
+            params={"key": settings.gemini_api_key}, json=body, timeout=TIMEOUT,
         )
         r.raise_for_status()
-        text = _first_text(r.json()) or ""
-        return None if text.strip().upper().startswith("OK") else (text.strip() or None)
+        return _first_image(r.json()) or (_stub_variants(images)[0] if images else None)
     except Exception:
-        log.exception("Gemini readiness check failed")
-        return None  # don't block generation on a failed check
+        log.exception("Gemini image generation failed")
+        return _stub_variants(images)[0] if images else None
 
 
-def generate(images: list[bytes], prompt: str, count: int = 2) -> list[bytes]:
-    """Generate `count` candidate images. Falls back to stub variants."""
-    if not settings.gemini_enabled:
-        return _stub(images, count)
-
-    out: list[bytes] = []
-    for _ in range(count):
-        try:
-            body = {
-                "contents": [{"parts": [{"text": prompt}, *_parts_from_images(images)]}],
-                "generationConfig": {"responseModalities": ["TEXT", "IMAGE"]},
-            }
-            r = httpx.post(
-                f"{API_ROOT}/{settings.gemini_image_model}:generateContent",
-                params={"key": settings.gemini_api_key},
-                json=body,
-                timeout=TIMEOUT,
-            )
-            r.raise_for_status()
-            img = _first_image(r.json())
-            if img:
-                out.append(img)
-        except Exception:
-            log.exception("Gemini image generation failed")
-    # If the API produced nothing, fall back so the owner still sees candidates.
-    return out or _stub(images, count)
-
-
-# ---- helpers ----
 def _first_text(payload: dict) -> str | None:
     for cand in payload.get("candidates", []):
         for part in cand.get("content", {}).get("parts", []):
@@ -132,9 +200,7 @@ def _first_image(payload: dict) -> bytes | None:
     return None
 
 
-def _stub(images: list[bytes], count: int) -> list[bytes]:
-    """No-key fallback: faithful processed variants of the first reference."""
+def _stub_variants(images: list[bytes]) -> list[bytes]:
     if not images:
         return []
-    variants = [jpeg for _label, jpeg in imaging.generate_variants(images[0])]
-    return variants[:count] if variants else [images[0]]
+    return [jpeg for _l, jpeg in imaging.generate_variants(images[0])] or [images[0]]

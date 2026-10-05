@@ -9,6 +9,7 @@ from pydantic import BaseModel, ConfigDict, Field
 class CandidateOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)
     id: int
+    label: str = ""
     url: str
     approved: bool
     comment: str | None = None

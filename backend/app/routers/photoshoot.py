@@ -48,20 +48,20 @@ async def _read_refs(files: list[UploadFile]) -> list[bytes]:
     return refs
 
 
-def _generate_into(job: GenerationJob, ref_bytes: list[bytes], db: Session) -> None:
-    """Build the prompt, call the AI, store candidates on the job."""
-    prompt = genai.build_prompt(job.preset, job.extra_prompt, job.feedback)
-    images = genai.generate(ref_bytes, prompt, count=2)
-    for img in images:
+def _generate_set_into(
+    job: GenerationJob, ref_bytes: list[bytes], size_mm, db: Session
+) -> None:
+    """Generate the full photoshoot set and store each labelled shot."""
+    shots = genai.generate_set(ref_bytes, size_mm=size_mm, extra=job.extra_prompt)
+    for label, img in shots:
         url = storage.save_bytes(img, ".jpg")
-        db.add(GenerationCandidate(job_id=job.id, url=url))
+        db.add(GenerationCandidate(job_id=job.id, label=label, url=url))
 
 
 @router.post("/products/{product_id}/photoshoot", response_model=JobOut, status_code=201)
 async def start_photoshoot(
     product_id: int,
     files: list[UploadFile] = File(...),
-    preset: str = Form("white_studio"),
     extra_prompt: str | None = Form(None),
     db: Session = Depends(get_db),
 ):
@@ -70,19 +70,17 @@ async def start_photoshoot(
         raise HTTPException(status_code=404, detail="Product not found")
 
     ref_bytes = await _read_refs(files)
-    # Store references so regeneration can reuse them.
     ref_urls = [storage.save_bytes(b, ".jpg") for b in ref_bytes]
 
     job = GenerationJob(
         product_id=product_id,
-        preset=preset,
         extra_prompt=extra_prompt,
         reference_urls=ref_urls,
         readiness_hint=genai.assess_references(ref_bytes),
     )
     db.add(job)
     db.flush()
-    _generate_into(job, ref_bytes, db)
+    _generate_set_into(job, ref_bytes, product.tryon_size_mm, db)
     db.commit()
     return _load_job(db, job.id)
 
@@ -93,27 +91,36 @@ async def add_references(
     files: list[UploadFile] = File(...),
     db: Session = Depends(get_db),
 ):
-    """Owner adds more angles (per the AI's hint), then we regenerate."""
+    """Owner adds more angles (per the AI's hint), then we regenerate the set."""
     job = _load_job(db, job_id)
     if job is None:
         raise HTTPException(status_code=404, detail="Job not found")
     more = await _read_refs(files)
     job.reference_urls = [*job.reference_urls, *[storage.save_bytes(b, ".jpg") for b in more]]
     job.readiness_hint = None
-    all_refs = _fetch_refs(job)
-    _generate_into(job, all_refs, db)
+    product = db.get(Product, job.product_id)
+    _generate_set_into(job, _fetch_refs(job), product.tryon_size_mm if product else None, db)
     db.commit()
     return _load_job(db, job.id)
 
 
-@router.post("/photoshoot/{job_id}/regenerate", response_model=JobOut)
-def regenerate(job_id: int, body: RegenerateRequest, db: Session = Depends(get_db)):
-    job = _load_job(db, job_id)
-    if job is None:
-        raise HTTPException(status_code=404, detail="Job not found")
-    if body.feedback:
-        job.feedback = body.feedback
-    _generate_into(job, _fetch_refs(job), db)
+@router.post("/photoshoot/candidates/{cid}/regenerate", response_model=JobOut)
+def regenerate_candidate(cid: int, body: RegenerateRequest, db: Session = Depends(get_db)):
+    """Regenerate ONE shot (same type) with the reviewer's correction."""
+    cand = db.get(GenerationCandidate, cid)
+    if cand is None:
+        raise HTTPException(status_code=404, detail="Candidate not found")
+    job = _load_job(db, cand.job_id)
+    product = db.get(Product, job.product_id)
+    img = genai.generate_one(
+        _fetch_refs(job),
+        cand.label,
+        body.feedback,
+        product.tryon_size_mm if product else None,
+    )
+    if img:
+        url = storage.save_bytes(img, ".jpg")
+        db.add(GenerationCandidate(job_id=job.id, label=cand.label, url=url))
     db.commit()
     return _load_job(db, job.id)
 
