@@ -154,6 +154,12 @@ def reject(cid: int, body: RejectRequest, db: Session = Depends(get_db)):
     return _load_job(db, cand.job_id)
 
 
+@router.get("/genai-check")
+def genai_check():
+    """Diagnose the Gemini connection (owner-only). Reports status, not the key."""
+    return genai.diagnose()
+
+
 @router.get("/products/{product_id}/photoshoots", response_model=list[JobOut])
 def list_jobs(product_id: int, db: Session = Depends(get_db)):
     stmt = (

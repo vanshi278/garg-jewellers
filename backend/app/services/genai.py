@@ -135,6 +135,31 @@ def generate_one(
     return img
 
 
+def diagnose() -> dict:
+    """Owner diagnostic: make a minimal Gemini image call and report the raw
+    outcome (status + error text, never the key) so failures are visible."""
+    if not settings.gemini_enabled:
+        return {"enabled": False}
+    out: dict = {"enabled": True, "image_model": settings.gemini_image_model}
+    try:
+        body = {
+            "contents": [{"parts": [{"text": "Generate a small photo of a red apple on white."}]}],
+            "generationConfig": {"responseModalities": ["TEXT", "IMAGE"]},
+        }
+        r = httpx.post(
+            f"{API_ROOT}/{settings.gemini_image_model}:generateContent",
+            params={"key": settings.gemini_api_key}, json=body, timeout=TIMEOUT,
+        )
+        out["status"] = r.status_code
+        if r.status_code == 200:
+            out["got_image"] = _first_image(r.json()) is not None
+        else:
+            out["error"] = r.text[:600]
+    except Exception as e:  # noqa: BLE001
+        out["exception"] = f"{type(e).__name__}: {str(e)[:300]}"
+    return out
+
+
 def assess_references(images: list[bytes]) -> str | None:
     """Return a hint if more angles are needed, else None."""
     if not settings.gemini_enabled:
