@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { api } from "@/lib/api";
 import ProductCard from "@/components/ProductCard";
+import MetalPrices from "@/components/MetalPrices";
 import { TryOnIcon } from "@/components/icons";
 import type { Category, ProductList } from "@/lib/types";
 
@@ -71,6 +72,9 @@ export default async function HomePage() {
           </div>
         </div>
       </section>
+
+      {/* Live gold & silver prices */}
+      <MetalPrices />
 
       {/* Category rail */}
       <section className="mx-auto max-w-6xl px-4 py-10 md:px-6">

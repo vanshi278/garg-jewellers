@@ -178,6 +178,27 @@ export interface GenJob {
   candidates: GenCandidate[];
 }
 
+// ---- Live metal prices ----
+export interface MetalPoint {
+  t: number;
+  v: number;
+}
+export interface MetalInfo {
+  unit: string;
+  price: number;
+  change_pct: number;
+  series: MetalPoint[];
+}
+export interface MetalsResponse {
+  range: string;
+  updated?: number;
+  available: boolean;
+  stale?: boolean;
+  gold?: MetalInfo;
+  silver?: MetalInfo;
+}
+export const METAL_RANGES = ["1W", "1M", "1Y", "5Y"] as const;
+
 export const PHOTOSHOOT_PRESETS: { value: string; label: string }[] = [
   { value: "white_studio", label: "White studio" },
   { value: "dark_luxe", label: "Dark luxe" },

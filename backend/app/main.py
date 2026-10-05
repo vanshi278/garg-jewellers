@@ -12,7 +12,7 @@ from app.config import settings
 from app.core.security import hash_password
 from app.database import Base, SessionLocal, engine
 from app.models.user import Role, User
-from app.routers import admin, auth, cart, catalogue, contact, orders, photoshoot, uploads
+from app.routers import admin, auth, cart, catalogue, contact, metals, orders, photoshoot, uploads
 
 # Import models so Base.metadata is fully populated before create_all.
 import app.models  # noqa: F401
@@ -68,6 +68,7 @@ app.include_router(contact.router)
 app.include_router(admin.router)
 app.include_router(uploads.router)
 app.include_router(photoshoot.router)
+app.include_router(metals.router)
 
 # Serve uploaded product images.
 _uploads_dir = Path(__file__).resolve().parent.parent / "uploads"
