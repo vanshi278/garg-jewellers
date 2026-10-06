@@ -107,7 +107,21 @@ export default function MetalPrices() {
       <div className="mb-4 flex flex-wrap items-end justify-between gap-3">
         <div>
           <p className="eyebrow">Today&apos;s rates</p>
-          <h2 className="mt-1 font-display text-2xl text-ink">Live gold &amp; silver prices</h2>
+          <h2 className="mt-1 flex items-center gap-2 font-display text-2xl text-ink">
+            Live gold &amp; silver prices
+            {data?.market && (
+              <span
+                className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[0.65rem] font-medium ${
+                  data.market.open
+                    ? "bg-good/15 text-good"
+                    : "bg-surface-alt text-ink-soft"
+                }`}
+              >
+                <span className={`h-1.5 w-1.5 rounded-full ${data.market.open ? "bg-good" : "bg-silver"}`} />
+                {data.market.open ? "LIVE" : "CLOSED"}
+              </span>
+            )}
+          </h2>
         </div>
         <div className="inline-flex rounded-full border border-line bg-surface p-1">
           {METAL_RANGES.map((r) => (
@@ -131,11 +145,10 @@ export default function MetalPrices() {
             <MetalCard name="Silver" info={data.silver} accent="#8a8f98" gradId="silvergrad" />
           </div>
           <p className="mt-3 text-xs text-silver">
-            {data.stale ? "Showing last available rates. " : ""}Indicative market rates
-            {data.updated
-              ? ` · updated ${new Date(data.updated).toLocaleString("en-IN", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" })}`
-              : ""}
-            . Final price may vary with making charges &amp; GST.
+            {data.market?.label ?? "Market rates"}
+            {data.market?.as_of ? ` · as of ${data.market.as_of}` : ""}.{" "}
+            Indicative rates derived from international (COMEX) spot in INR — not
+            official IBJA/MCX retail. Final price varies with making charges &amp; GST.
           </p>
         </>
       ) : (

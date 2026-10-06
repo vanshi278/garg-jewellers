@@ -189,6 +189,11 @@ export interface MetalInfo {
   change_pct: number;
   series: MetalPoint[];
 }
+export interface MetalMarket {
+  open: boolean;
+  label: string;
+  as_of: string;
+}
 export interface MetalsResponse {
   range: string;
   updated?: number;
@@ -196,6 +201,7 @@ export interface MetalsResponse {
   stale?: boolean;
   gold?: MetalInfo;
   silver?: MetalInfo;
+  market?: MetalMarket;
 }
 export const METAL_RANGES = ["1W", "1M", "1Y", "5Y"] as const;
 

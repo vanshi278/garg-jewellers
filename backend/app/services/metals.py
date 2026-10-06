@@ -9,8 +9,12 @@ from __future__ import annotations
 
 import logging
 import time
+from datetime import datetime, timedelta, timezone
 
 import httpx
+
+# India has no DST, so a fixed +5:30 offset is always correct (no tzdata needed).
+IST = timezone(timedelta(hours=5, minutes=30))
 
 log = logging.getLogger("garg.metals")
 
@@ -28,6 +32,22 @@ RANGES = {
 }
 
 _cache: dict[str, tuple[float, dict]] = {}
+
+
+def _market_status() -> dict:
+    """Indian bullion market (MCX) hours: Mon–Fri, 09:00–23:30 IST."""
+    now = datetime.now(IST)
+    minutes = now.hour * 60 + now.minute
+    is_open = now.weekday() < 5 and (9 * 60) <= minutes <= (23 * 60 + 30)
+    return {
+        "open": is_open,
+        "label": (
+            "Live · Indian market open"
+            if is_open
+            else "Indian market closed — showing last traded (international) rate"
+        ),
+        "as_of": now.strftime("%d %b %Y, %I:%M %p IST"),
+    }
 
 
 def _series(symbol: str, yrange: str, interval: str) -> list[tuple[int, float]]:
@@ -51,9 +71,12 @@ def _latest(points: list[tuple[int, float]]) -> float:
 def get_prices(range_key: str) -> dict:
     range_key = range_key if range_key in RANGES else "1M"
     now = time.time()
+    # Market status is computed fresh every call (it changes faster than the
+    # price cache); price data is cached.
+    market = _market_status()
     cached = _cache.get(range_key)
     if cached and now - cached[0] < TTL_SECONDS:
-        return cached[1]
+        return {**cached[1], "market": market}
 
     yrange, interval = RANGES[range_key]
     try:
@@ -81,9 +104,9 @@ def get_prices(range_key: str) -> dict:
             "silver": pack(silver_series, "₹ / kg"),
         }
         _cache[range_key] = (now, payload)
-        return payload
+        return {**payload, "market": market}
     except Exception:
         log.exception("Metals price fetch failed")
         if cached:
-            return {**cached[1], "stale": True}
-        return {"range": range_key, "available": False}
+            return {**cached[1], "stale": True, "market": market}
+        return {"range": range_key, "available": False, "market": market}
